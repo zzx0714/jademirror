@@ -152,20 +152,39 @@ function getJadeType(jade) {
   return 'pei'
 }
 
-function normalizeExtrudeUVs(geometry) {
+function normalizeCapUVs(geometry) {
   const pos = geometry.attributes.position
   const uv = geometry.attributes.uv
   if (!pos || !uv) return
+  const depth = (() => {
+    let dMin = Infinity, dMax = -Infinity
+    for (let i = 0; i < pos.count; i++) { const z = pos.getZ(i); if (z < dMin) dMin = z; if (z > dMax) dMax = z }
+    return { min: dMin, max: dMax, half: (dMax - dMin) / 2 }
+  })()
+  const topZ = depth.max - depth.half * 0.25
+  const bottomZ = depth.min + depth.half * 0.25
   let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity
   for (let i = 0; i < pos.count; i++) {
-    const x = pos.getX(i), y = pos.getY(i)
-    if (x < minX) minX = x; if (x > maxX) maxX = x
-    if (y < minY) minY = y; if (y > maxY) maxY = y
+    const z = pos.getZ(i)
+    if (z < bottomZ || z > topZ) {
+      const x = pos.getX(i), y = pos.getY(i)
+      if (x < minX) minX = x; if (x > maxX) maxX = x
+      if (y < minY) minY = y; if (y > maxY) maxY = y
+    }
   }
-  const rangeX = maxX - minX || 1, rangeY = maxY - minY || 1, pad = 0.02
+  const rangeX = maxX - minX || 1, rangeY = maxY - minY || 1
+  const scale = Math.max(rangeX, rangeY)
+  const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2
+  const pad = 0.03
   for (let i = 0; i < uv.count; i++) {
-    uv.setX(i, pad + (1 - 2 * pad) * (pos.getX(i) - minX) / rangeX)
-    uv.setY(i, pad + (1 - 2 * pad) * (pos.getY(i) - minY) / rangeY)
+    const z = pos.getZ(i)
+    if (z > topZ || z < bottomZ) {
+      uv.setX(i, pad + (1 - 2 * pad) * ((pos.getX(i) - cx) / scale + 0.5))
+      uv.setY(i, pad + (1 - 2 * pad) * ((pos.getY(i) - cy) / scale + 0.5))
+    } else {
+      uv.setX(i, 0)
+      uv.setY(i, 0)
+    }
   }
   uv.needsUpdate = true
 }
@@ -212,50 +231,50 @@ function buildJadeGeometry(type) {
   let geometry
   switch (type) {
     case 'bi': {
-      const s = new THREE.Shape(); s.absarc(0, 0, 1.4, 0, Math.PI * 2, false)
-      const hole = new THREE.Path(); hole.absarc(0, 0, 0.32, 0, Math.PI * 2, true); s.holes.push(hole)
-      geometry = new THREE.ExtrudeGeometry(s, { depth: 0.22, bevelEnabled: true, bevelThickness: 0.06, bevelSize: 0.06, bevelSegments: 6, curveSegments: 64 }); break
+      const s = new THREE.Shape(); s.absarc(0, 0, 1.5, 0, Math.PI * 2, false)
+      const hole = new THREE.Path(); hole.absarc(0, 0, 0.28, 0, Math.PI * 2, true); s.holes.push(hole)
+      geometry = new THREE.ExtrudeGeometry(s, { depth: 0.12, bevelEnabled: true, bevelThickness: 0.03, bevelSize: 0.03, bevelSegments: 3, curveSegments: 64 }); break
     }
     case 'huan': {
-      const s = new THREE.Shape(); s.absarc(0, 0, 1.15, 0, Math.PI * 2, false)
-      const hole = new THREE.Path(); hole.absarc(0, 0, 0.72, 0, Math.PI * 2, true); s.holes.push(hole)
-      geometry = new THREE.ExtrudeGeometry(s, { depth: 0.18, bevelEnabled: true, bevelThickness: 0.05, bevelSize: 0.05, bevelSegments: 6, curveSegments: 64 }); break
+      const s = new THREE.Shape(); s.absarc(0, 0, 1.2, 0, Math.PI * 2, false)
+      const hole = new THREE.Path(); hole.absarc(0, 0, 0.68, 0, Math.PI * 2, true); s.holes.push(hole)
+      geometry = new THREE.ExtrudeGeometry(s, { depth: 0.1, bevelEnabled: true, bevelThickness: 0.03, bevelSize: 0.03, bevelSegments: 3, curveSegments: 64 }); break
     }
     case 'cong': {
-      const s = new THREE.Shape(), cw = 0.82, cr = 0.08
+      const s = new THREE.Shape(), cw = 0.82, cr = 0.06
       s.moveTo(-cw + cr, -cw); s.lineTo(cw - cr, -cw); s.quadraticCurveTo(cw, -cw, cw, -cw + cr)
       s.lineTo(cw, cw - cr); s.quadraticCurveTo(cw, cw, cw - cr, cw); s.lineTo(-cw + cr, cw)
       s.quadraticCurveTo(-cw, cw, -cw, cw - cr); s.lineTo(-cw, -cw + cr); s.quadraticCurveTo(-cw, -cw, -cw + cr, -cw)
       const hole = new THREE.Path(); hole.absarc(0, 0, 0.28, 0, Math.PI * 2, true); s.holes.push(hole)
-      geometry = new THREE.ExtrudeGeometry(s, { depth: 2.0, bevelEnabled: true, bevelThickness: 0.04, bevelSize: 0.04, bevelSegments: 4, curveSegments: 24 }); break
+      geometry = new THREE.ExtrudeGeometry(s, { depth: 2.0, bevelEnabled: true, bevelThickness: 0.03, bevelSize: 0.03, bevelSegments: 3, curveSegments: 24 }); break
     }
     case 'huang': {
       const s = new THREE.Shape(); s.absarc(0, 0, 1.35, Math.PI * 0.18, Math.PI * 0.82, false)
       const hole = new THREE.Path(); hole.absarc(0, 0, 0.82, Math.PI * 0.82, Math.PI * 0.18, true); s.holes.push(hole)
-      geometry = new THREE.ExtrudeGeometry(s, { depth: 0.28, bevelEnabled: true, bevelThickness: 0.06, bevelSize: 0.06, bevelSegments: 6, curveSegments: 48 }); break
+      geometry = new THREE.ExtrudeGeometry(s, { depth: 0.16, bevelEnabled: true, bevelThickness: 0.04, bevelSize: 0.04, bevelSegments: 4, curveSegments: 48 }); break
     }
     case 'le': {
       const s = new THREE.Shape(); s.moveTo(0, -1.3); s.quadraticCurveTo(0.52, -1.3, 0.52, -0.85)
       s.lineTo(0.52, 0.85); s.quadraticCurveTo(0.52, 1.3, 0, 1.3); s.quadraticCurveTo(-0.52, 1.3, -0.52, 0.85)
       s.lineTo(-0.52, -0.85); s.quadraticCurveTo(-0.52, -1.3, 0, -1.3)
-      geometry = new THREE.ExtrudeGeometry(s, { depth: 0.32, bevelEnabled: true, bevelThickness: 0.07, bevelSize: 0.07, bevelSegments: 6, curveSegments: 32 }); break
+      geometry = new THREE.ExtrudeGeometry(s, { depth: 0.2, bevelEnabled: true, bevelThickness: 0.04, bevelSize: 0.04, bevelSegments: 3, curveSegments: 32 }); break
     }
     case 'pai': {
-      const s = new THREE.Shape(), pw = 0.82, ph = 1.3, pr = 0.1
+      const s = new THREE.Shape(), pw = 0.9, ph = 1.4, pr = 0.08
       s.moveTo(-pw + pr, -ph); s.lineTo(pw - pr, -ph); s.quadraticCurveTo(pw, -ph, pw, -ph + pr)
       s.lineTo(pw, ph - pr); s.quadraticCurveTo(pw, ph, pw - pr, ph); s.lineTo(-pw + pr, ph)
       s.quadraticCurveTo(-pw, ph, -pw, ph - pr); s.lineTo(-pw, -ph + pr); s.quadraticCurveTo(-pw, -ph, -pw + pr, -ph)
-      geometry = new THREE.ExtrudeGeometry(s, { depth: 0.22, bevelEnabled: true, bevelThickness: 0.05, bevelSize: 0.05, bevelSegments: 6, curveSegments: 16 }); break
+      geometry = new THREE.ExtrudeGeometry(s, { depth: 0.12, bevelEnabled: true, bevelThickness: 0.03, bevelSize: 0.03, bevelSegments: 3, curveSegments: 16 }); break
     }
     default: {
       const s = new THREE.Shape(); s.moveTo(0, -1.35)
       s.bezierCurveTo(0.65, -1.35, 1.15, -0.78, 1.15, 0); s.bezierCurveTo(1.15, 0.78, 0.65, 1.35, 0, 1.35)
       s.bezierCurveTo(-0.65, 1.35, -1.15, 0.78, -1.15, 0); s.bezierCurveTo(-1.15, -0.78, -0.65, -1.35, 0, -1.35)
       const hole = new THREE.Path(); hole.absarc(0, 1.0, 0.09, 0, Math.PI * 2, false); s.holes.push(hole)
-      geometry = new THREE.ExtrudeGeometry(s, { depth: 0.26, bevelEnabled: true, bevelThickness: 0.07, bevelSize: 0.07, bevelSegments: 8, curveSegments: 48 }); break
+      geometry = new THREE.ExtrudeGeometry(s, { depth: 0.14, bevelEnabled: true, bevelThickness: 0.04, bevelSize: 0.04, bevelSegments: 4, curveSegments: 48 }); break
     }
   }
-  normalizeExtrudeUVs(geometry)
+  normalizeCapUVs(geometry)
   return geometry
 }
 
@@ -275,6 +294,30 @@ function createMultiViewShaderMaterial() {
   return mat
 }
 
+function createJadeSideMaterial() {
+  return new THREE.MeshPhysicalMaterial({
+    color: 0xc8dcc8, roughness: 0.14, metalness: 0.02,
+    transmission: 0.78, thickness: 1.6,
+    clearcoat: 0.88, clearcoatRoughness: 0.1,
+    ior: 1.54, attenuationColor: new THREE.Color(0x98b8a4),
+    attenuationDistance: 0.7, sheen: 0.28, sheenRoughness: 0.45,
+    sheenColor: new THREE.Color(0xd0e8d8),
+    envMapIntensity: 1.2, side: THREE.DoubleSide,
+  })
+}
+
+function createJadeCapMaterial() {
+  return new THREE.MeshPhysicalMaterial({
+    color: 0xf5faf5, roughness: 0.2, metalness: 0.02,
+    transmission: 0.55, thickness: 0.8,
+    clearcoat: 0.8, clearcoatRoughness: 0.16,
+    ior: 1.52, attenuationColor: new THREE.Color(0xb0d0c0),
+    attenuationDistance: 1.0, sheen: 0.35, sheenRoughness: 0.5,
+    sheenColor: new THREE.Color(0xddf0e4),
+    envMapIntensity: 1.0, side: THREE.DoubleSide,
+  })
+}
+
 function buildJadeMesh() {
   if (jadeMesh) {
     group.remove(jadeMesh)
@@ -291,21 +334,18 @@ function buildJadeMesh() {
   const type = getJadeType(props.jade)
   const geometry = buildJadeGeometry(type)
 
+  const sideMaterial = createJadeSideMaterial()
+
   if (props.multiViews.length > 0) {
     multiViewMaterial = createMultiViewShaderMaterial()
-    jadeMesh = new THREE.Mesh(geometry, multiViewMaterial)
+    jadeMesh = new THREE.Mesh(geometry, [sideMaterial, multiViewMaterial])
   } else {
-    const material = new THREE.MeshPhysicalMaterial({
-      color: 0xf0f5f0, roughness: 0.18, metalness: 0.02, transmission: 0.72, thickness: 1.2,
-      clearcoat: 0.85, clearcoatRoughness: 0.12, ior: 1.52, attenuationColor: 0xa8c8b4,
-      attenuationDistance: 0.8, sheen: 0.3, sheenRoughness: 0.5, sheenColor: 0xd8efe0,
-      envMapIntensity: 1.2, side: THREE.DoubleSide,
-    })
-    jadeMesh = new THREE.Mesh(geometry, material)
+    const capMaterial = createJadeCapMaterial()
+    jadeMesh = new THREE.Mesh(geometry, [sideMaterial, capMaterial])
   }
 
   if (type === 'huang') { jadeMesh.rotation.x = Math.PI / 2; jadeMesh.position.z = -0.12 }
-  else if (type === 'pai' || type === 'pei' || type === 'le') { jadeMesh.rotation.y = Math.PI * 0.08 }
+  else if (type === 'pai' || type === 'pei' || type === 'le') { jadeMesh.rotation.y = Math.PI * 0.06 }
   else if (type === 'cong') { jadeMesh.rotation.x = Math.PI * 0.05; jadeMesh.rotation.y = Math.PI * 0.12 }
   group.add(jadeMesh)
 }
@@ -361,12 +401,25 @@ function loadGLBModel(url) {
 function applyTexture(src) {
   if (!jadeMesh || !src) return
   if (activeTexture) { activeTexture.dispose(); activeTexture = null }
+
+  const materials = Array.isArray(jadeMesh.material) ? jadeMesh.material : [jadeMesh.material]
+  const capMat = materials.length > 1 ? materials[1] : materials[0]
+  if (!capMat) return
+
   const loader = new THREE.TextureLoader()
   loader.load(src, (texture) => {
-    texture.colorSpace = THREE.SRGBColorSpace; texture.wrapS = THREE.ClampToEdgeWrapping
-    texture.wrapT = THREE.ClampToEdgeWrapping; texture.anisotropy = 8
-    activeTexture = texture; jadeMesh.material.map = texture; jadeMesh.material.needsUpdate = true
-  }, undefined, () => { jadeMesh.material.map = null; jadeMesh.material.needsUpdate = true })
+    texture.colorSpace = THREE.SRGBColorSpace
+    texture.wrapS = THREE.ClampToEdgeWrapping
+    texture.wrapT = THREE.ClampToEdgeWrapping
+    texture.anisotropy = 8
+    activeTexture = texture
+    capMat.map = texture
+    capMat.color = new THREE.Color(0xffffff)
+    capMat.needsUpdate = true
+  }, undefined, () => {
+    capMat.map = null
+    capMat.needsUpdate = true
+  })
 }
 
 function preloadMultiViewTextures() {

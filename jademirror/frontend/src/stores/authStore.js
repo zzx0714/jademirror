@@ -120,8 +120,29 @@ export const useAuthStore = defineStore('auth', {
         // ignore logout network errors
       }
 
+      // 清空认证信息
       this.clearAuth()
       this.sessionChecked = true
+      
+      // 清空用户数据
+      const { useUserStore } = await import('./userStore')
+      const userStore = useUserStore()
+      userStore.resetTest()  // 清空测试答案、匹配结果、生成的图片等
+      userStore.works = []  // 清空展厅作品
+      userStore.persistWorks()  // 持久化空数组
+      
+      // 清空助手数据
+      const { useAssistantStore } = await import('./assistantStore')
+      const assistantStore = useAssistantStore()
+      assistantStore.messages = []  // 清空对话历史
+      assistantStore.memories = []  // 清空记忆
+      assistantStore.lastMemoryDigest = ''
+      assistantStore.guidedTestActive = false  // 重置测试状态
+      assistantStore.guidedQuestionIndex = 0
+      assistantStore.galleryTourAuto = false  // 停止展厅导览
+      assistantStore.teardown()  // 清理定时器
+      
+      console.log('✅ 用户登出，所有数据已清空')
     },
   },
 })

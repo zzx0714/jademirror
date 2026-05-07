@@ -58,15 +58,6 @@ function scrollToBottom() {
   })
 }
 
-const latestAssistantMessage = computed(() => {
-  for (let index = messages.value.length - 1; index >= 0; index -= 1) {
-    if (messages.value[index].role === 'assistant') {
-      return messages.value[index]
-    }
-  }
-  return null
-})
-
 const voiceStatusText = computed(() => {
   if (!voiceStore.recognitionSupported) {
     return '当前浏览器不支持语音输入，可继续文字对话。'
@@ -137,13 +128,6 @@ async function endHoldToTalk() {
 
 function stopVoiceInput() {
   voiceStore.stopListening()
-}
-
-function replayAssistantVoice() {
-  if (!latestAssistantMessage.value || !voiceStore.synthesisSupported) {
-    return
-  }
-  voiceStore.speak(latestAssistantMessage.value.content)
 }
 
 async function createOpeningMessage() {
@@ -284,12 +268,12 @@ onBeforeUnmount(() => {
       <header class="chat-head">
         <div>
           <h2>{{ jade.name }}</h2>
-          <p class="text-muted">{{ jade.dynasty }}代人格对话中</p>
+          <p class="text-muted">让千年古玉以第一人称回应你的提问</p>
         </div>
         <div class="head-actions">
           <button type="button" class="jade-button secondary" @click="restartConversation">重新开场</button>
-          <button type="button" class="jade-button secondary" @click="router.push('/generate')">
-            前往生成页
+          <button type="button" class="jade-button primary" @click="router.push('/generate')">
+            生成图像
           </button>
         </div>
       </header>
@@ -356,14 +340,6 @@ onBeforeUnmount(() => {
               @click="stopVoiceInput"
             >
               停止聆听
-            </button>
-            <button
-              type="button"
-              class="jade-button secondary"
-              :disabled="!voiceStore.synthesisSupported || !latestAssistantMessage"
-              @click="replayAssistantVoice"
-            >
-              重播玉音
             </button>
             <button
               type="button"

@@ -70,12 +70,51 @@ export const useVoiceStore = defineStore('voice', {
     initialized: false,
     holdListening: false,
     persona: 'default',
-    autoListening: false,
-    autoListenSilenceTimer: 0,
-    autoListenAccumulated: '',
-    vadSpeechDetected: false,
   }),
   actions: {
+    /**
+     * 修正语音识别常见错误
+     * 优先将玉文化相关的误识别词汇修正为正确的"玉"字
+     */
+    correctTranscript(text) {
+      if (!text) return ''
+      
+      let corrected = text
+      
+      // 玉文化相关的常见误识别修正
+      // "域" → "玉" (最常见的误识别)
+      corrected = corrected.replace(/与域对话/g, '与玉对话')
+      corrected = corrected.replace(/和域对话/g, '和玉对话')
+      corrected = corrected.replace(/跟域对话/g, '跟玉对话')
+      corrected = corrected.replace(/域对话/g, '玉对话')
+      corrected = corrected.replace(/开始与域/g, '开始与玉')
+      corrected = corrected.replace(/开始和域/g, '开始和玉')
+      
+      // 其他可能的误识别
+      corrected = corrected.replace(/遇见/g, '玉')  // 在"我的玉"等语境下
+      corrected = corrected.replace(/预见/g, '玉')
+      corrected = corrected.replace(/御/g, '玉')
+      corrected = corrected.replace(/育/g, '玉')
+      
+      // 生成相关
+      corrected = corrected.replace(/生成域/g, '生成玉')
+      corrected = corrected.replace(/生域/g, '生玉')
+      corrected = corrected.replace(/生成我的域/g, '生成我的玉')
+      
+      // 匹配相关
+      corrected = corrected.replace(/匹配域/g, '匹配玉')
+      corrected = corrected.replace(/匹配的域/g, '匹配的玉')
+      
+      // 古玉相关
+      corrected = corrected.replace(/古域/g, '古玉')
+      corrected = corrected.replace(/顾域/g, '古玉')
+      
+      console.log('🔧 语音识别修正:')
+      console.log(`   原文: "${text}"`)
+      console.log(`   修正: "${corrected}"`)
+      
+      return corrected
+    },
     init() {
       if (this.initialized) {
         return
@@ -88,9 +127,8 @@ export const useVoiceStore = defineStore('voice', {
       if (support.RecognitionCtor) {
         this.recognition = new support.RecognitionCtor()
         this.recognition.lang = RECOGNITION_LANG
-        this.recognition.interimResults = true
+        this.recognition.interimResults = false
         this.recognition.maxAlternatives = 1
-        this.recognition.continuous = true
 
         this.recognition.onstart = () => {
           this.listening = true
@@ -107,18 +145,10 @@ export const useVoiceStore = defineStore('voice', {
             holdSessionResolve = null
             holdSessionPromise = null
           }
-          if (this.autoListening) {
-            this.restartAutoListen()
-          }
         }
 
         this.recognition.onerror = (event) => {
-          const errorCode = event?.error
-          if (errorCode === 'no-speech' && this.autoListening) {
-            this.restartAutoListen()
-            return
-          }
-          this.lastError = this.mapRecognitionError(errorCode)
+          this.lastError = this.mapRecognitionError(event?.error)
           this.listening = false
           this.recognizing = false
           this.holdListening = false
@@ -127,39 +157,11 @@ export const useVoiceStore = defineStore('voice', {
             holdSessionResolve = null
             holdSessionPromise = null
           }
-          if (this.autoListening && errorCode !== 'not-allowed' && errorCode !== 'audio-capture') {
-            this.restartAutoListen()
-          }
         }
 
         this.recognition.onresult = (event) => {
-          let finalTranscript = ''
-          let interimTranscript = ''
-
-          for (let i = event.resultIndex; i < event.results.length; i++) {
-            const result = event.results[i]
-            const text = result[0]?.transcript || ''
-            if (result.isFinal) {
-              finalTranscript += text
-            } else {
-              interimTranscript += text
-            }
-          }
-
-          if (finalTranscript) {
-            this.lastTranscript = finalTranscript.trim()
-            this.autoListenAccumulated += finalTranscript
-          }
-
-          if (interimTranscript && this.autoListening) {
-            this.vadSpeechDetected = true
-            this.resetAutoListenSilenceTimer()
-          }
-
-          if (finalTranscript && this.autoListening) {
-            this.vadSpeechDetected = true
-            this.resetAutoListenSilenceTimer()
-          }
+          const transcript = event?.results?.[0]?.[0]?.transcript || ''
+          this.lastTranscript = this.correctTranscript(transcript.trim())
         }
       }
 
@@ -185,11 +187,6 @@ export const useVoiceStore = defineStore('voice', {
       this.lastError = ''
       this.lastTranscript = ''
 
-      const savedInterim = this.recognition.interimResults
-      const savedContinuous = this.recognition.continuous
-      this.recognition.interimResults = false
-      this.recognition.continuous = false
-
       return new Promise((resolve) => {
         let settled = false
         const baseOnEnd = this.recognition.onend
@@ -208,8 +205,6 @@ export const useVoiceStore = defineStore('voice', {
           this.recognition.onend = baseOnEnd
           this.recognition.onerror = baseOnError
           this.recognition.onresult = baseOnResult
-          this.recognition.interimResults = savedInterim
-          this.recognition.continuous = savedContinuous
         }
 
         const finalize = (value) => {
@@ -237,7 +232,7 @@ export const useVoiceStore = defineStore('voice', {
 
         this.recognition.onresult = (event) => {
           const transcript = event?.results?.[0]?.[0]?.transcript || ''
-          this.lastTranscript = transcript.trim()
+          this.lastTranscript = this.correctTranscript(transcript.trim())
           finalize(this.lastTranscript)
         }
 
@@ -319,10 +314,6 @@ export const useVoiceStore = defineStore('voice', {
       window.speechSynthesis.cancel()
       this.speaking = false
     },
-    ensureVoicesLoaded() {
-      if (typeof window === 'undefined' || !window.speechSynthesis) return
-      window.speechSynthesis.getVoices()
-    },
     speak(text) {
       this.speakWithMood(text, '')
     },
@@ -346,7 +337,6 @@ export const useVoiceStore = defineStore('voice', {
       }
 
       this.stopSpeaking()
-      this.ensureVoicesLoaded()
 
       const utter = new SpeechSynthesisUtterance(content)
       utter.lang = RECOGNITION_LANG
@@ -357,119 +347,18 @@ export const useVoiceStore = defineStore('voice', {
 
       utter.onstart = () => {
         this.speaking = true
-        this.lastError = ''
       }
 
       utter.onend = () => {
         this.speaking = false
       }
 
-      utter.onerror = (event) => {
+      utter.onerror = () => {
         this.speaking = false
-        const code = event?.error || ''
-        if (code === 'interrupted' || code === 'canceled') {
-          return
-        }
-        if (code === 'not-allowed') {
-          this.lastError = '语音播报需要与页面交互后才能播放，请点击页面后再试。'
-          return
-        }
-        if (code === 'audio-busy' || code === 'network') {
-          this.lastError = '语音引擎繁忙或网络异常，请稍后重试。'
-          return
-        }
-        if (code === 'synthesis-unavailable') {
-          this.lastError = '当前环境不支持语音合成。'
-          return
-        }
         this.lastError = '语音播报失败，请稍后重试。'
       }
 
-      let started = false
-      const run = () => {
-        if (started) return
-        started = true
-        window.speechSynthesis.speak(utter)
-      }
-      if (window.speechSynthesis.getVoices().length === 0) {
-        const once = () => {
-          window.speechSynthesis.removeEventListener('voiceschanged', once)
-          run()
-        }
-        window.speechSynthesis.addEventListener('voiceschanged', once)
-        window.setTimeout(() => {
-          window.speechSynthesis.removeEventListener('voiceschanged', once)
-          run()
-        }, 400)
-      } else {
-        run()
-      }
-    },
-    startAutoListen(silenceThreshold = 1500) {
-      this.init()
-      if (!this.recognitionSupported || !this.recognition) {
-        this.lastError = '当前浏览器不支持语音识别，无法开启自动监听。'
-        return false
-      }
-
-      if (this.autoListening) {
-        return true
-      }
-
-      this.autoListening = true
-      this.autoListenAccumulated = ''
-      this.vadSpeechDetected = false
-      this.lastError = ''
-
-      try {
-        this.recognition.start()
-        return true
-      } catch {
-        this.autoListening = false
-        this.lastError = '自动监听启动失败，请稍后重试。'
-        return false
-      }
-    },
-    stopAutoListen() {
-      this.autoListening = false
-      this.clearAutoListenSilenceTimer()
-      this.stopListening()
-      const result = this.autoListenAccumulated.trim()
-      this.autoListenAccumulated = ''
-      this.vadSpeechDetected = false
-      return result
-    },
-    resetAutoListenSilenceTimer() {
-      this.clearAutoListenSilenceTimer()
-    },
-    clearAutoListenSilenceTimer() {
-      if (this.autoListenSilenceTimer) {
-        window.clearTimeout(this.autoListenSilenceTimer)
-        this.autoListenSilenceTimer = 0
-      }
-    },
-    restartAutoListen() {
-      if (!this.autoListening) return
-      this.clearAutoListenSilenceTimer()
-      try {
-        if (!this.recognizing) {
-          this.recognition.start()
-        }
-      } catch {
-        // ignore restart race
-      }
-    },
-    checkAutoListenSilence(silenceThreshold = 1500) {
-      if (!this.autoListening) return
-      this.clearAutoListenSilenceTimer()
-      if (this.vadSpeechDetected) {
-        this.autoListenSilenceTimer = window.setTimeout(() => {
-          this.autoListenSilenceTimer = 0
-        }, silenceThreshold)
-      }
-    },
-    isAutoListenSilenceTimedOut() {
-      return this.autoListening && this.vadSpeechDetected && !this.autoListenSilenceTimer && this.autoListenAccumulated.trim().length > 0
+      window.speechSynthesis.speak(utter)
     },
   },
 })

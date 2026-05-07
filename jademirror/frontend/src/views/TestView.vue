@@ -19,6 +19,24 @@ const currentIndex = ref(0)
 const testMode = ref(userStore.testMode || '')
 const modeSelected = computed(() => !!testMode.value)
 
+// 监听userStore.testMode的变化，同步到本地testMode
+watch(
+  () => userStore.testMode,
+  (newMode) => {
+    if (newMode && newMode !== testMode.value) {
+      console.log(`📢 TestView检测到testMode变化: ${testMode.value} → ${newMode}`)
+      testMode.value = newMode
+      // 清空之前的答案
+      for (const key of Object.keys(answers)) {
+        delete answers[key]
+      }
+      currentIndex.value = 0
+      errorText.value = ''
+    }
+  },
+  { immediate: false }
+)
+
 const currentQuestions = computed(() => {
   if (testMode.value === 'deep') return deepTestQuestions
   if (testMode.value === 'quick') return quickTestQuestions
@@ -107,6 +125,19 @@ function goToNext() {
   if (isLastQuestion.value) return
   goToQuestion(currentIndex.value + 1)
 }
+
+// 同步语音/AI路径记录的答案到本地状态，触发自动跳转
+watch(
+  () => userStore.testAnswers,
+  (newVal) => {
+    for (const key of Object.keys(newVal)) {
+      if (newVal[key] && !answers[key]) {
+        answers[key] = newVal[key]
+      }
+    }
+  },
+  { deep: true }
+)
 
 watch(
   () => answers[currentQuestion.value?.id],
